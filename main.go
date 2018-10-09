@@ -1,0 +1,124 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	//"strings"
+	"syscall"
+	"time"
+
+	"github.com/golang/glog"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"github.com/event-exporter/sinks/stackdriver"
+	"k8s.io/client-go/tools/clientcmd"
+
+
+    "github.com/event-exporter/sinks"
+    "github.com/event-exporter/utils"
+    "github.com/event-exporter/watchers"
+    "github.com/event-exporter/watchers/events"
+)
+
+var (
+	resyncPeriod       = flag.Duration("resync-period", 30*time.Minute, "Reflector resync period")
+	prometheusEndpoint = flag.String("prometheus-endpoint", ":80", "Endpoint on which to ")
+	influxdb           = flag.String("influxdb", "", "String")
+	path               = flag.String("path", "", "String")
+)
+
+type eventExporter struct {
+        sink    sinks.Sink
+        watcher watchers.Watcher
+}
+
+func (e *eventExporter) Run(stopCh <-chan struct{}) {
+        utils.RunConcurrentlyUntil(stopCh, e.sink.Run, e.watcher.Run)
+}
+
+func newEventExporter(client kubernetes.Interface, sink sinks.Sink, resyncPeriod time.Duration) *eventExporter {
+        return &eventExporter{
+                sink:    sink,
+                watcher: createWatcher(client, sink, resyncPeriod),
+        }
+}
+
+func createWatcher(client kubernetes.Interface, sink sinks.Sink, resyncPeriod time.Duration) watchers.Watcher {
+        return events.NewEventWatcher(client, &events.EventWatcherConfig{
+                OnList:       sink.OnList,
+                ResyncPeriod: resyncPeriod,
+                Handler:      sink,
+        })
+}
+
+
+func newSystemStopChannel() chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-c
+		glog.Infof("Recieved signal %s, terminating", sig.String())
+
+		ch <- struct{}{}
+	}()
+
+	return ch
+}
+
+func newKubernetesClient() (kubernetes.Interface, error) {
+
+	if *path != "" {
+		config,_ := clientcmd.BuildConfigFromFlags("", *path)
+		return kubernetes.NewForConfig(config)
+	} else {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
+		}
+		return kubernetes.NewForConfig(config)
+	}
+}
+
+func main() {
+	flag.Set("logtostderr", "true")
+	defer glog.Flush()
+	flag.Parse()
+
+	client, err := newKubernetesClient()
+	if err != nil {
+		glog.Fatalf("Failed to initialize kubernetes client: %v", err)
+	}
+
+	sink := stackdriver.NewSink(*influxdb)
+	eventExporter := newEventExporter(client, sink, *resyncPeriod)
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		glog.Fatalf("Prometheus monitoring failed: %v", http.ListenAndServe(*prometheusEndpoint, nil))
+	}()
+
+	stopCh := newSystemStopChannel()
+	eventExporter.Run(stopCh)
+}
