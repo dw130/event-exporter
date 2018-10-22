@@ -88,7 +88,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 			meta := all[ len(all) - 1 ]
 			podList := strings.Split(meta,"-")
 			ll := len(podList)
-			if strings.Contains(allSG[k], "-v") == true {
+			if strings.Contains(allSG[k], "-v") == true && ll > 2 {
 				//canarydemo-canary-v019-9dl9d
 				//podId := podList[  ll - 1 ]
 				ver   = podList[  ll - 2 ]
@@ -120,13 +120,15 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
 
 		ret := REG.FindAllStringSubmatch(val,1)
-		if len(ret) != 0{
+		if len(ret) != 0 {
 			pods := ret[0][1]
-			if pods == "RUNNING" {
+			if pods == "Running" {
 				allMetric[sg][ver][0]  = allMetric[sg][ver][0] + 1
 			} else {
 				allMetric[sg][ver][1]  = allMetric[sg][ver][1] + 1
 			}
+		} else {
+			allMetric[sg][ver][1]  = allMetric[sg][ver][1] + 1
 		}
 	}
 
@@ -135,7 +137,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
 func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 
-	bp, err := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
+	bp, _ := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
 		Database:  "prometheus",
 	})
 
