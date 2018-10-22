@@ -12,6 +12,7 @@ import (
 	//"encoding/json"
 	"sync"
 	"regexp"
+	"github.com/influxdata/influxdb/client/v2"
 )
 
 var (
@@ -30,12 +31,12 @@ var (
 	ALLAPP = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:applications:members"
 	SG = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:clusters:members"
 	INSTANCE = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:members"
-	PODSTATUS = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:attributes:kubernetes:instances:%v"
+	PODSTATUS = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:attributes:kubernetes:instances:%v:status"
 	POCPRO = "kubernetes:instances:poc-qcloud-sh*"
 	REG = regexp.MustCompile("\"podStatus\":[^\"]*\"([^\"]+)")
 )
 
-func FetchD(client *redis.Client) {
+func FetchD(client *redis.Client,inf  influxdb.Client) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -64,7 +65,7 @@ func FetchD(client *redis.Client) {
 	    }
 	}
 	glog.Infof("fetch total sg number:%v",count)
-	fetchdetail(client)
+	fetchdetail(client,inf)
 }
 
 func fetchAll(client *redis.Client) {
@@ -72,11 +73,41 @@ func fetchAll(client *redis.Client) {
 	defer mutex.Unlock()
 }
 
-func fetchdetail(client *redis.Client) {
+func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
-
+	allMetric := maps[string] map[string] [2]int{} 
 
 	for k,_ := range allSG {
+
+		all := strings.Split(allSG[k],":")
+		var ver string
+		var sg  string
+
+		if len(all) {
+			meta := all[ len(all) - 1 ]
+			podList := strings.Split(meta,"-")
+			if strings.Contains(allSG[k], "-v") == true {
+				//canarydemo-canary-v019-9dl9d
+				ll := len(podList)
+				//podId := podList[  ll - 1 ]
+				ver   = podList[  ll - 2 ]
+				sg    = strings.Join( podList[ 0: ll - 2 ]  )
+			} else {
+				ver = "default"
+				sg  =  strings.Join( podList[ 0: ll - 1 ]  )
+			}
+
+			_,ok := allMetric[sg]
+			if ok == false {
+				allMetric[sg] = map[string] [2]string{}
+			}
+			_,ok = allMetric[sg][ver]
+			if ok == false {
+				allMetric[sg][ver] = [2]string{0,0}
+			}
+			
+		}
+
 		pod := fmt.Sprintf(PODSTATUS, allSG[k][21:])
 		val, err := client.Get(pod).Result()
 		if err != nil {
@@ -86,11 +117,49 @@ func fetchdetail(client *redis.Client) {
 
 
 		ret := REG.FindAllStringSubmatch(val,1)
-		fmt.Printf("*****ret***%v\n",ret)
+		if len(ret) {
+			pods := ret[0][1]
+			if pods == "RUNNING" {
+				allMetric[sg][ver][0]  = allMetric[sg][ver][0] + 1
+			} else {
+				allMetric[sg][ver][1]  = allMetric[sg][ver][1] + 1
+			}
+		}
 	}
+
+	sendInf(allMetric,inf)
 }
 
+func sendInf(allMetric maps[string] map[string] [2]int, inf influxdb.client) {
 
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  "prometheus",
+	})
+
+	t := time.Now()
+
+	for k,_ := range allMetric {
+		for kk,_ := range allMetric[k] {
+			tags := map[string]string{"label_cluster": k, "version": kk}
+			
+			ddd := allMetric[k][kk]
+			pt, err := client.NewPoint("sg_pod_success_num", tags, map[string]interface{}{"value": ddd[0]}, t)
+			if err != nil {
+				glog.Debugf("point fail:%v",err)
+			}
+
+			fmt.Printf("****pt***%+v\n",pt)
+			bp.AddPoint(pt)
+
+			pt, err = client.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
+			if err != nil {
+				glog.Debugf("point fail:%v",err)
+			}
+			fmt.Printf("****pt***%+v\n",pt)
+			bp.AddPoint(pt)
+		}
+	}
+}
 
 
 func main() {
@@ -109,6 +178,12 @@ func main() {
 		DB:0,
 	})
 
+	c, _ := client.NewHTTPClient(client.HTTPConfig{
+		Addr:     *influxdbFlag,
+		Username: "",
+		Password: "",
+	})
+
 	fInterval := *interval
 
 	FlushInterval := time.Duration( time.Duration(fInterval) * time.Second) 
@@ -117,7 +192,7 @@ func main() {
 	allSGInt := time.Duration(1 *  time.Hour)
 	collectSG := time.Tick(allSGInt)
 	fetchAll(client)
-        FetchD(client)
+	FetchD(client,c)
 	//loop:
 	for {
 		select {
