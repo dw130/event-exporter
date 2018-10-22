@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 	//"strings"
-	"encoding/json"
+	//"encoding/json"
 	"sync"
 	"regexp"
 )
@@ -32,7 +32,7 @@ var (
 	INSTANCE = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:members"
 	PODSTATUS = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:attributes:kubernetes:instances:%v"
 	POCPRO = "kubernetes:instances:poc-qcloud-sh*"
-	REG := regexp.MustCompile("\"podStatus\":[^\"]*\"([^\"]+)")
+	REG = regexp.MustCompile("\"podStatus\":[^\"]*\"([^\"]+)")
 )
 
 func FetchD(client *redis.Client) {
@@ -84,7 +84,8 @@ func fetchdetail(client *redis.Client) {
 			continue
 		}
 
-		ret := REG.FindSubmatch(val)
+
+		ret := REG.FindAllStringSubmatch(val,1)
 		fmt.Printf("*****ret***%v\n",ret)
 	}
 }
