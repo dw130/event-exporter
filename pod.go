@@ -30,7 +30,7 @@ var (
 	SG = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:clusters:members"
 	INSTANCE = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:members"
 	PODSTATUS = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:attributes:kubernetes:instances:%v"
-	POCPRO = "kubernetes:instances:poc-qcloud-sh"
+	POCPRO = "kubernetes:instances:poc-qcloud-sh*"
 )
 
 func FetchD(client *redis.Client) {
@@ -50,16 +50,16 @@ func FetchD(client *redis.Client) {
 	for {
 	    var keys []string
 	    var err error
-	    keys, cursor, err = client.SScan(INSTANCE, cursor, prefix, 100).Result()
+	    keys, cursor, err = client.SScan(INSTANCE, cursor, prefix, 500).Result()
+	    allSG = append(allSG,keys...)
 	    if err != nil {
 	        glog.Infof("redis scan err:%v",err)
 	        break loop
 	    }
 	    count += len(keys)
-	    if cursor == 1 {
+	    if cursor <= 0 {
 	        break loop
 	    }
-	    allSG = append(allSG,keys...)
 	}
 	glog.Infof("fetch total sg number:%v",count)
 	fetchdetail(client)
@@ -84,7 +84,9 @@ func fetchdetail(client *redis.Client) {
 	    if err != nil { 
 	        fmt. Println ( "error:" , err ) 
 	    }
-	    fmt.Printf("fetchdetail:%v",ret)
+            for k,v := range ret {
+	      fmt.Printf("fetchdetail:%v***%v\n",k,v)
+            } 
 	}
 }
 
