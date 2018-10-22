@@ -12,7 +12,8 @@ import (
 	//"encoding/json"
 	"sync"
 	"regexp"
-	"github.com/influxdata/influxdb/client/v2"
+	influxdb "github.com/influxdata/influxdb/client/v2"
+	"strings"
 )
 
 var (
@@ -75,7 +76,7 @@ func fetchAll(client *redis.Client) {
 
 func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
-	allMetric := map[string] map[string] [2]int{} 
+	allMetric := map[string] map[string] [2]int{} {}
 
 	for k,_ := range allSG {
 
@@ -86,20 +87,20 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 		if len(all) != 0 {
 			meta := all[ len(all) - 1 ]
 			podList := strings.Split(meta,"-")
+			ll := len(podList)
 			if strings.Contains(allSG[k], "-v") == true {
 				//canarydemo-canary-v019-9dl9d
-				ll := len(podList)
 				//podId := podList[  ll - 1 ]
 				ver   = podList[  ll - 2 ]
-				sg    = strings.Join( podList[ 0: ll - 2 ]  )
+				sg    = strings.Join( podList[ 0: ll - 2 ], "-"  )
 			} else {
 				ver = "default"
-				sg  =  strings.Join( podList[ 0: ll - 1 ]  )
+				sg  =  strings.Join( podList[ 0: ll - 1 ],  "-" )
 			}
 
 			_,ok := allMetric[sg]
 			if ok == false {
-				allMetric[sg] = map[string] [2]string{}
+				allMetric[sg] = map[string] [2]string{}{}
 			}
 			_,ok = allMetric[sg][ver]
 			if ok == false {
@@ -132,7 +133,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 	sendInf(allMetric,inf)
 }
 
-func sendInf(allMetric maps[string] map[string] [2]int, inf influxdb.client) {
+func sendInf(allMetric map[string] map[string] [2]int, inf influxdb.client) {
 
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  "prometheus",
