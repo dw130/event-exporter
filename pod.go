@@ -8,7 +8,7 @@ import (
 	"github.com/golang/glog"
 	"os"
 	"time"
-	"strings"
+	//"strings"
 	"encoding/json"
 	"sync"
 )
@@ -50,7 +50,7 @@ func FetchD(client *redis.Client) {
 	for {
 	    var keys []string
 	    var err error
-	    keys, cursor, err = client.Scan(INSTANCE, cursor, prefix, 100).Result()
+	    keys, cursor, err = client.SScan(INSTANCE, cursor, prefix, 100).Result()
 	    if err != nil {
 	        glog.Infof("redis scan err:%v",err)
 	        break loop
@@ -59,13 +59,13 @@ func FetchD(client *redis.Client) {
 	    if cursor == 1 {
 	        break loop
 	    }
-	    allSG = append(allSG,keys..)
+	    allSG = append(allSG,keys...)
 	}
 	glog.Infof("fetch total sg number:%v",count)
 	fetchdetail(client)
 }
 
-func fetchAll(client *redis.Client,pod string) {
+func fetchAll(client *redis.Client) {
 	mutex.Lock()
 	defer mutex.Unlock()
 }
@@ -73,14 +73,14 @@ func fetchAll(client *redis.Client,pod string) {
 func fetchdetail(client *redis.Client) {
 	for k,_ := range allSG {
 		pod := fmt.Sprintf(PODSTATUS, allSG[k][21:])
-		val, err := client.Get("key").Result()
+		val, err := client.Get(pod).Result()
 		if err != nil {
 			glog.Infof("fetch pod status fail:%v",err)
 			continue
 		}
 		var ret map[string] interface{}
 
-		err := json. Unmarshal ( val , &ret ) 
+		err = json. Unmarshal ( []byte(val) , &ret ) 
 	    if err != nil { 
 	        fmt. Println ( "error:" , err ) 
 	    }
@@ -90,32 +90,6 @@ func fetchdetail(client *redis.Client) {
 
 
 
-func fetchData(client *redis.Client) {
-	n := time.Now()
-
-	pipe := client.Pipeline()
-
-	var cursor uint64
-	var count int
-
-	loop:
-	for {
-	    var keys []string
-	    var err error
-	    keys, cursor, err = client.Scan(cursor, "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:clusters:attributes:kubernetes:clusters:*:serverGroup:*", 100).Result()
-	    if err != nil {
-	        glog.Infof("redis scan err:%v",err)
-	        break loop
-	    }
-	    count += len(keys)
-	    if cursor == 0 {
-	        break
-	    }
-	    fetchdetail(client,keys)
-	}
-
-	glog.Infof("total serverGroup num:%v",count)
-}
 
 func main() {
 
@@ -135,19 +109,19 @@ func main() {
 
 	fInterval := *interval
 
-	FlushInterval := time.Duration(fInterval * time.Second )
+	FlushInterval := time.Duration( time.Duration(fInterval) * time.Second) 
 	startCollect := time.Tick(FlushInterval)
 
 	allSGInt := time.Duration(1 *  time.Hour)
 	collectSG := time.Tick(allSGInt)
-
 	fetchAll(client)
-	loop:
+        FetchD(client)
+	//loop:
 	for {
 		select {
 		case <- startCollect: 
 			FetchD(client)
-		}
+		
 		case <- collectSG: 
 			fetchAll(client)
 		}
