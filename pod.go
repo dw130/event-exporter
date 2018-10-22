@@ -76,7 +76,7 @@ func fetchAll(client *redis.Client) {
 
 func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
-	allMetric := map[string] map[string] [2]int{} {}
+	allMetric := map[string] map[string] []int {}
 
 	for k,_ := range allSG {
 
@@ -100,11 +100,11 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
 			_,ok := allMetric[sg]
 			if ok == false {
-				allMetric[sg] = map[string] [2]string{}{}
+				allMetric[sg] = map[string] []int{}
 			}
 			_,ok = allMetric[sg][ver]
 			if ok == false {
-				allMetric[sg][ver] = [2]string{0,0}
+				allMetric[sg][ver] = []int{0,0}
 			}
 			
 		} else {
@@ -120,7 +120,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
 
 		ret := REG.FindAllStringSubmatch(val,1)
-		if len(ret) {
+		if len(ret) != 0{
 			pods := ret[0][1]
 			if pods == "RUNNING" {
 				allMetric[sg][ver][0]  = allMetric[sg][ver][0] + 1
@@ -135,7 +135,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
 func sendInf(allMetric map[string] map[string] [2]int, inf influxdb.client) {
 
-	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+	bp, err := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
 		Database:  "prometheus",
 	})
 
@@ -146,17 +146,17 @@ func sendInf(allMetric map[string] map[string] [2]int, inf influxdb.client) {
 			tags := map[string]string{"label_cluster": k, "version": kk}
 			
 			ddd := allMetric[k][kk]
-			pt, err := client.NewPoint("sg_pod_success_num", tags, map[string]interface{}{"value": ddd[0]}, t)
+			pt, err := influxdb.NewPoint("sg_pod_success_num", tags, map[string]interface{}{"value": ddd[0]}, t)
 			if err != nil {
-				glog.Debugf("point fail:%v",err)
+				glog.Infof("point fail:%v",err)
 			}
 
 			fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 
-			pt, err = client.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
+			pt, err = influxdb.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
 			if err != nil {
-				glog.Debugf("point fail:%v",err)
+				glog.Infof("point fail:%v",err)
 			}
 			fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
@@ -181,7 +181,7 @@ func main() {
 		DB:0,
 	})
 
-	c, _ := client.NewHTTPClient(client.HTTPConfig{
+	c, _ := influxdb.NewHTTPClient(client.HTTPConfig{
 		Addr:     *influxdbFlag,
 		Username: "",
 		Password: "",
