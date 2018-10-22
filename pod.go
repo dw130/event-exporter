@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 	//"strings"
-	//"encoding/json"
+	"encoding/json"
 	"sync"
 	"regexp"
 	influxdb "github.com/influxdata/influxdb/client/v2"
@@ -24,7 +24,7 @@ var (
 	interval      = flag.Int("flush interval",40,"")
 	env           = flag.String("env","poc","")
 	gd            = flag.String("gd","","")
-	gdInter       = flag.int("gdtime",1800,"")
+	gdInter       = flag.Int("gdtime",1800,"")
 )
 
 var (
@@ -83,7 +83,7 @@ func fetchAll(client *redis.Client) {
 	resp, err := http.Get(*gd)
 	if err != nil {
 		// handle error
-		log.Println(err)
+		glog.Println(err)
 		return
 	}
 
@@ -91,7 +91,7 @@ func fetchAll(client *redis.Client) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Println(err)
+		glog.Println(err)
 		return
 	}
 
@@ -168,6 +168,8 @@ func sendInfGD(inf influxdb.Client) {
 	mutex1.Lock()
 	defer mutex1.Unlock()
 
+	t := time.Now()
+	
 	bp, _ := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
 		Database:  "prometheus",
 	})
