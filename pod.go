@@ -11,6 +11,7 @@ import (
 	//"strings"
 	"encoding/json"
 	"sync"
+	"regexp"
 )
 
 var (
@@ -31,6 +32,7 @@ var (
 	INSTANCE = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:members"
 	PODSTATUS = "com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.KubernetesV1Provider:instances:attributes:kubernetes:instances:%v"
 	POCPRO = "kubernetes:instances:poc-qcloud-sh*"
+	REG := regexp.MustCompile("\"podStatus\":[^\"]*\"([^\"]+)")
 )
 
 func FetchD(client *redis.Client) {
@@ -71,6 +73,9 @@ func fetchAll(client *redis.Client) {
 }
 
 func fetchdetail(client *redis.Client) {
+
+
+
 	for k,_ := range allSG {
 		pod := fmt.Sprintf(PODSTATUS, allSG[k][21:])
 		val, err := client.Get(pod).Result()
@@ -78,15 +83,9 @@ func fetchdetail(client *redis.Client) {
 			glog.Infof("fetch pod status fail:%v",err)
 			continue
 		}
-		var ret map[string] interface{}
 
-		err = json. Unmarshal ( []byte(val) , &ret ) 
-	    if err != nil { 
-	        fmt. Println ( "error:" , err ) 
-	    }
-            for k,v := range ret {
-	      fmt.Printf("fetchdetail:%v***%v\n",k,v)
-            } 
+		ret := REG.FindSubmatch(val)
+		fmt.Printf("*****ret***%v\n",ret)
 	}
 }
 
