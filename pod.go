@@ -133,7 +133,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 	sendInf(allMetric,inf)
 }
 
-func sendInf(allMetric map[string] map[string] [2]int, inf influxdb.client) {
+func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 
 	bp, err := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
 		Database:  "prometheus",
@@ -181,7 +181,7 @@ func main() {
 		DB:0,
 	})
 
-	c, _ := influxdb.NewHTTPClient(client.HTTPConfig{
+	c, _ := influxdb.NewHTTPClient(influxdb.HTTPConfig{
 		Addr:     *influxdbFlag,
 		Username: "",
 		Password: "",
@@ -200,7 +200,7 @@ func main() {
 	for {
 		select {
 		case <- startCollect: 
-			FetchD(client)
+			FetchD(client,c)
 		
 		case <- collectSG: 
 			fetchAll(client)
