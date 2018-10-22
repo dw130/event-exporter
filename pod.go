@@ -75,7 +75,7 @@ func fetchAll(client *redis.Client) {
 
 func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 
-	allMetric := maps[string] map[string] [2]int{} 
+	allMetric := map[string] map[string] [2]int{} 
 
 	for k,_ := range allSG {
 
@@ -83,7 +83,7 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 		var ver string
 		var sg  string
 
-		if len(all) {
+		if len(all) != 0 {
 			meta := all[ len(all) - 1 ]
 			podList := strings.Split(meta,"-")
 			if strings.Contains(allSG[k], "-v") == true {
@@ -106,6 +106,8 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 				allMetric[sg][ver] = [2]string{0,0}
 			}
 			
+		} else {
+			continue
 		}
 
 		pod := fmt.Sprintf(PODSTATUS, allSG[k][21:])
