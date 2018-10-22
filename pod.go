@@ -14,6 +14,8 @@ import (
 	"regexp"
 	influxdb "github.com/influxdata/influxdb/client/v2"
 	"strings"
+	"net/http"
+	"io/ioutil"
 )
 
 var (
@@ -21,11 +23,15 @@ var (
 	influxdbFlag  = flag.String("influxdb", "", "String")
 	interval      = flag.Int("flush interval",40,"")
 	env           = flag.String("env","poc","")
+	gd            = flag.String("gd","","")
+	gdInter       = flag.int("gdtime",1800,"")
 )
 
 var (
 	allSG = []string{}
 	mutex   sync.Mutex
+	mutex1  sync.Mutex
+	allgb = []map[string]interface{}{}
 )
 
 var (
@@ -49,6 +55,7 @@ func FetchD(client *redis.Client,inf  influxdb.Client) {
 	if evv == "poc" {
 		prefix = POCPRO
 	}
+	allSG = []string{}
 
 	loop:
 	for {
@@ -70,8 +77,29 @@ func FetchD(client *redis.Client,inf  influxdb.Client) {
 }
 
 func fetchAll(client *redis.Client) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	mutex1.Lock()
+	defer mutex1.Unlock()
+	//gd
+	resp, err := http.Get(*gd)
+	if err != nil {
+		// handle error
+		log.Println(err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	result := []map[string]interface{}{}
+
+	json.Unmarshal(body, result) //解析json字符串
+
+	allgb = result
 }
 
 func fetchdetail(client *redis.Client, inf  influxdb.Client) {
@@ -133,6 +161,54 @@ func fetchdetail(client *redis.Client, inf  influxdb.Client) {
 	}
 
 	sendInf(allMetric,inf)
+	sendInfGD(inf)
+}
+
+func sendInfGD(inf influxdb.Client) {
+	mutex1.Lock()
+	defer mutex1.Unlock()
+
+	bp, _ := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
+		Database:  "prometheus",
+	})
+
+	for k,_ := range allgb {
+		d := allgb[k]
+		//{"appName":"canarydemo","context":"poc","detail":null,"instanceNum":5,"namespace":"devops","stack":"main"}
+		appname,ok := d["appName"]
+		if ok == false {
+			continue
+		}
+
+		stack,ok := d["stack"]
+		if ok == false {
+			continue
+		}
+
+		detail,ok := d["detail"]
+		if ok == false {
+			continue
+		}
+
+		var sg = ""
+		if detail == nil {
+			sg = fmt.Sprintf("%v-%v",appname,stack)
+		} else {
+			sg = fmt.Sprintf("%v-%v-%v",appname,stack, detail)
+		}	
+
+		tags := map[string]string{"label_cluster": sg}
+			
+		pt, err := influxdb.NewPoint("sg_gard_num", tags, map[string]interface{}{"value": d["instanceNum"]}, t)
+		if err != nil {
+			glog.Infof("point fail:%v",err)
+		}
+
+		fmt.Printf("***pt****%v\n",pt)
+		bp.AddPoint(pt)
+
+	}
+	inf.Write(bp)
 }
 
 func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
@@ -153,17 +229,18 @@ func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 				glog.Infof("point fail:%v",err)
 			}
 
-			fmt.Printf("****pt***%+v\n",pt)
+			//fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 
 			pt, err = influxdb.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
 			if err != nil {
 				glog.Infof("point fail:%v",err)
 			}
-			fmt.Printf("****pt***%+v\n",pt)
+			//fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 		}
 	}
+	inf.Write(bp)
 }
 
 
@@ -192,19 +269,22 @@ func main() {
 	fInterval := *interval
 
 	FlushInterval := time.Duration( time.Duration(fInterval) * time.Second) 
-	startCollect := time.Tick(FlushInterval)
 
-	allSGInt := time.Duration(1 *  time.Hour)
-	collectSG := time.Tick(allSGInt)
+	FlushInterval1 := time.Duration( time.Duration(*gdInter) * time.Second)
+
+	startCollect1 := time.Tick(FlushInterval1)
+
+	collectSG := time.Tick(FlushInterval)
+
 	fetchAll(client)
 	FetchD(client,c)
 	//loop:
 	for {
 		select {
-		case <- startCollect: 
+		case <- collectSG: 
 			FetchD(client,c)
 		
-		case <- collectSG: 
+		case <- startCollect1: 
 			fetchAll(client)
 		}
 	}
