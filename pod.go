@@ -220,7 +220,11 @@ func sendInfGD(inf influxdb.Client) {
 
 		var sg = ""
 		if detail == nil {
-			sg = fmt.Sprintf("%v-%v",appname,stack)
+			if stack != nil {
+				sg = fmt.Sprintf("%v-%v",appname,stack)
+			} else {
+				sg = fmt.Sprintf("%v",appname)
+			}
 		} else {
 			sg = fmt.Sprintf("%v-%v-%v",appname,stack, detail)
 		}	
