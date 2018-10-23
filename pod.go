@@ -83,7 +83,8 @@ func fetchAll(client *redis.Client) {
 	resp, err := http.Get(*gd)
 	if err != nil {
 		// handle error
-		glog.Println(err)
+		fmt.Printf("*****get meta data fail**%v\n",err)
+		glog.Infof("%v",err)
 		return
 	}
 
@@ -91,7 +92,7 @@ func fetchAll(client *redis.Client) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		glog.Println(err)
+		glog.Infof("%v",err)
 		return
 	}
 
@@ -169,7 +170,7 @@ func sendInfGD(inf influxdb.Client) {
 	defer mutex1.Unlock()
 
 	t := time.Now()
-	
+
 	bp, _ := influxdb.NewBatchPoints(influxdb.BatchPointsConfig{
 		Database:  "prometheus",
 	})
