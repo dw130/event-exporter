@@ -16,6 +16,7 @@ import (
 	"strings"
 	"net/http"
 	"io/ioutil"
+	"crypto/tls"
 )
 
 var (
@@ -95,7 +96,7 @@ func fetchAll(client *redis.Client) {
 			},
 		}
 
-		resp, err = client.Get("https://localhost:8443")
+		resp, err = client.Get(url)
 	} else {
 		resp, err = http.Get(*gd)
 	}
@@ -116,10 +117,13 @@ func fetchAll(client *redis.Client) {
 		return
 	}
 
-	fmt.Printf("***catch result**%v\n",body)
 	result := []map[string]interface{}{}
 
-	json.Unmarshal(body, result) //解析json字符串
+	err = json.Unmarshal(body, &result) //解析json字符串
+	if err != nil {
+		glog.Infof("err:%v",err)
+		return
+	}
 
 	allgb = result
 }
@@ -253,14 +257,14 @@ func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 				glog.Infof("point fail:%v",err)
 			}
 
-			//fmt.Printf("****pt***%+v\n",pt)
+			fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 
 			pt, err = influxdb.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
 			if err != nil {
 				glog.Infof("point fail:%v",err)
 			}
-			//fmt.Printf("****pt***%+v\n",pt)
+			fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 		}
 	}
