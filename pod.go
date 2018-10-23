@@ -256,7 +256,7 @@ func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 			tags := map[string]string{"label_cluster": k, "version": kk}
 			
 			ddd := allMetric[k][kk]
-			pt, err := influxdb.NewPoint("sg_pod_success_num", tags, map[string]interface{}{"value": ddd[0]}, t)
+			pt, err := influxdb.NewPoint("sg_pod_success_num", tags, map[string]interface{}{"value": float32(ddd[0])}, t)
 			if err != nil {
 				glog.Infof("point fail:%v",err)
 			}
@@ -264,7 +264,7 @@ func sendInf(allMetric map[string] map[string] []int, inf influxdb.Client) {
 			fmt.Printf("****pt***%+v\n",pt)
 			bp.AddPoint(pt)
 
-			pt, err = influxdb.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": ddd[1]}, t)
+			pt, err = influxdb.NewPoint("sg_pod_failed_num", tags, map[string]interface{}{"value": float32(ddd[1])}, t)
 			if err != nil {
 				glog.Infof("point fail:%v",err)
 			}
