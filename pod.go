@@ -79,8 +79,28 @@ func FetchD(client *redis.Client,inf  influxdb.Client) {
 func fetchAll(client *redis.Client) {
 	mutex1.Lock()
 	defer mutex1.Unlock()
-	//gd
-	resp, err := http.Get(*gd)
+	
+	url := *gd
+
+	var resp *http.Response
+	var err error
+
+	if strings.Contains(url,"https") {
+
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+                    InsecureSkipVerify: true,
+                },
+			},
+		}
+
+		resp, err = client.Get("https://localhost:8443")
+	} else {
+		resp, err = http.Get(*gd)
+	}
+
+
 	if err != nil {
 		// handle error
 		fmt.Printf("*****get meta data fail**%v\n",err)
@@ -96,6 +116,7 @@ func fetchAll(client *redis.Client) {
 		return
 	}
 
+	fmt.Printf("***catch result**%v\n",body)
 	result := []map[string]interface{}{}
 
 	json.Unmarshal(body, result) //解析json字符串
